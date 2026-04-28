@@ -1,11 +1,29 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit, HabitLog, Task, UserProfile } from '../types';
+import { saveUserToCloud } from './cloudStorage';
 
 const HABITS_KEY = 'habits_v1';
 const LOGS_KEY = 'logs_v1';
 const ONBOARDED_KEY = 'onboarded_v1';
 const TASKS_KEY = 'tasks_v1';
 const PROFILE_KEY = 'profile_v1';
+const USER_EMAIL_KEY = 'user_email_v1';
+
+async function getStoredEmail(): Promise<string | null> {
+  return AsyncStorage.getItem(USER_EMAIL_KEY);
+}
+
+export async function getUserEmail(): Promise<string | null> {
+  return AsyncStorage.getItem(USER_EMAIL_KEY);
+}
+
+export async function setUserEmail(email: string): Promise<void> {
+  await AsyncStorage.setItem(USER_EMAIL_KEY, email);
+}
+
+export async function clearUserEmail(): Promise<void> {
+  await AsyncStorage.removeItem(USER_EMAIL_KEY);
+}
 
 export async function getHabits(): Promise<Habit[]> {
   try {
@@ -26,6 +44,9 @@ export async function getHabits(): Promise<Habit[]> {
 
 export async function saveHabits(habits: Habit[]): Promise<void> {
   await AsyncStorage.setItem(HABITS_KEY, JSON.stringify(habits));
+  getStoredEmail().then(email => {
+    if (email) saveUserToCloud(email, { habits });
+  });
 }
 
 export async function getLogs(): Promise<HabitLog> {
@@ -39,6 +60,9 @@ export async function getLogs(): Promise<HabitLog> {
 
 export async function saveLogs(logs: HabitLog): Promise<void> {
   await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+  getStoredEmail().then(email => {
+    if (email) saveUserToCloud(email, { logs });
+  });
 }
 
 export async function toggleHabitCompletion(habitId: string, date: string): Promise<string[]> {
@@ -75,6 +99,9 @@ export async function getTasks(): Promise<Task[]> {
 
 export async function saveTasks(tasks: Task[]): Promise<void> {
   await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  getStoredEmail().then(email => {
+    if (email) saveUserToCloud(email, { tasks });
+  });
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
@@ -88,8 +115,15 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  getStoredEmail().then(email => {
+    if (email) saveUserToCloud(email, { profile });
+  });
+}
+
+export async function clearAuthSession(): Promise<void> {
+  await AsyncStorage.multiRemove([USER_EMAIL_KEY, ONBOARDED_KEY]);
 }
 
 export async function resetAllData(): Promise<void> {
-  await AsyncStorage.multiRemove([HABITS_KEY, LOGS_KEY, ONBOARDED_KEY, TASKS_KEY]);
+  await AsyncStorage.multiRemove([HABITS_KEY, LOGS_KEY, ONBOARDED_KEY, TASKS_KEY, PROFILE_KEY, USER_EMAIL_KEY]);
 }

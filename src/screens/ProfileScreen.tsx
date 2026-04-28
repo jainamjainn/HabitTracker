@@ -13,12 +13,15 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Habit, HabitLog, UserProfile } from '../types';
+import { signOut } from 'firebase/auth';
+import { auth } from '../utils/firebase';
 import {
   getHabits,
   getLogs,
   getUserProfile,
   saveUserProfile,
   resetAllData,
+  clearAuthSession,
 } from '../utils/storage';
 import { getCurrentStreak, getLongestStreak, getMonthlyRate } from '../utils/habitUtils';
 import { getTodayKey, getLastNDays, getGreeting } from '../utils/dateUtils';
@@ -53,11 +56,32 @@ export default function ProfileScreen({ onReset }: Props) {
     if (!trimmed) return;
     const updated: UserProfile = {
       name: trimmed,
+      email: profile?.email ?? '',
       joinedAt: profile?.joinedAt ?? new Date().toISOString(),
     };
     await saveUserProfile(updated);
     setProfile(updated);
     setEditingName(false);
+  }
+
+  function handleSignOut() {
+    Alert.alert(
+      'Sign Out',
+      'Your data is saved to the cloud. Sign back in anytime to restore it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          onPress: async () => {
+            try {
+              await signOut(auth);
+              await clearAuthSession();
+            } catch {}
+            onReset();
+          },
+        },
+      ]
+    );
   }
 
   function handleReset() {
@@ -70,7 +94,10 @@ export default function ProfileScreen({ onReset }: Props) {
           text: 'Reset All Data',
           style: 'destructive',
           onPress: async () => {
-            await resetAllData();
+            try {
+              await signOut(auth);
+              await resetAllData();
+            } catch {}
             onReset();
           },
         },
@@ -142,6 +169,9 @@ export default function ProfileScreen({ onReset }: Props) {
             </TouchableOpacity>
           )}
 
+          {profile?.email ? (
+            <Text style={styles.emailText}>{profile.email}</Text>
+          ) : null}
           {profile?.joinedAt && (
             <Text style={styles.joinedDate}>
               Member since{' '}
@@ -286,6 +316,22 @@ export default function ProfileScreen({ onReset }: Props) {
 
           <View style={styles.divider} />
 
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleSignOut}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="log-out-outline" size={18} color="#D97706" />
+            </View>
+            <Text style={[styles.settingText, { color: '#D97706' }]}>Sign Out</Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleReset}
@@ -344,6 +390,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     alignItems: 'center', justifyContent: 'center',
   },
+  emailText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 2 },
   joinedDate: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
 
   greetingBanner: {

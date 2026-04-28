@@ -1,97 +1,144 @@
 # HabitTracker
 
-A personal habit tracker and productivity app built with Expo (React Native). Inspired by TickTick — all premium features included.
+A personal habit tracking web app built with React Native (Expo) and Firebase. Track daily habits, manage tasks, run focus sessions, and view progress stats — all synced to the cloud with email/password login.
+
+**Live App:** https://habit-tracker-77ac0.web.app
+
+---
 
 ## Features
 
 ### Today
-- Personalized greeting using your name
-- Rectangular habit cards with color-fill progress showing streak vs. goal
-- Mark habits complete with a tap
+- Daily habit checklist with one-tap completion
+- Streak counter and progress bar per habit
 - Daily completion percentage in the header
+- Personalised greeting with date
 
 ### Habits
-- Add, edit, and delete habits
-- Custom emoji, color, and motivation text per habit
-- Set reminder days (specific days of the week)
-- Streak goal presets (7, 14, 21, 30, 60, 100 days) or custom input
-- Daily/weekly push notification reminders
+- Preset library with 25+ habits across Popular / Health / Sports categories
+- Create fully custom habits with emoji, colour, and motivation text
+- Habit type: **Build** a habit or **Quit** a habit
+- Time range: Anytime / Morning / Afternoon / Evening
+- Streak goal (default 30 days)
+- Optional daily reminders with day-of-week selection
+- Edit and delete habits
 
-### Tasks
-- Full task management with title, notes, priority, and due dates
-- Priority levels: High, Medium, Low
-- Eisenhower Matrix view — 4-quadrant grid (Do First / Schedule / Delegate / Eliminate)
-- Quick due date chips (Today, Tomorrow, In 3 Days, Next Week)
-- Toggle between list view and matrix view
+### Tasks (To-Do)
+- Add tasks with title, notes, and priority (Low / Medium / High)
+- Due dates: Today, Tomorrow, or any custom date
+- Mark complete, edit, delete
+- Filter by All / Active / Done
 
 ### Focus
-- Pomodoro timer with duration options: 15, 20, 25, 30, 45 minutes
+- Pomodoro timer: preset durations (15, 20, 25, 30, 45 min) or custom (1–180 min)
 - Stopwatch mode
-- Accurate background timing (keeps counting when app is minimized)
-- Session counter with dot indicators
-- Vibration alert on Pomodoro completion
+- Session counter tracks completed Pomodoros
+- Accurate background timing — stays correct when app is minimised
+
+### Stats
+- Weekly habit completion bar chart
+- Per-habit streak and monthly completion rate
+- Overview cards: total habits, completions, best streak, days active
 
 ### Me (Profile)
-- Set your display name
-- Stats overview: total habits, completions, best streak, days active
-- Weekly bar chart of completions
-- Per-habit progress bars with monthly completion rate
-- Reset all app data
+- Edit display name
+- View email and member since date
+- Sign out (data stays in cloud, restored on next login)
+- Reset all data (permanent delete)
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Expo (React Native) |
+| Framework | React Native + Expo (web export) |
 | Language | TypeScript |
-| Navigation | React Navigation (Bottom Tabs) |
-| Storage | AsyncStorage |
-| Notifications | expo-notifications |
+| Navigation | React Navigation v7 (Bottom Tabs) |
+| Auth | Firebase Authentication (Email/Password) |
+| Database | Firebase Firestore |
+| Hosting | Firebase Hosting |
+| Local cache | AsyncStorage (offline-first) |
 | Icons | @expo/vector-icons (Ionicons) |
 
-## Getting Started
+---
 
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or later)
-- [Expo Go](https://expo.dev/go) app on your iPhone or Android device
+## Architecture
 
-### Run locally
+- **Local-first**: All reads/writes go to AsyncStorage — fast and works offline
+- **Cloud backup**: Every save fires a background Firestore sync (no waiting)
+- **Auth**: Firebase Auth manages sessions; Firestore stores data keyed by email
+- **Cross-device restore**: Sign in on any device → data pulled from Firestore automatically
 
-```bash
-# Install dependencies
-npm install
-
-# Start the dev server
-npx expo start --port 8082
-```
-
-Scan the QR code in Expo Go to open the app on your phone.
+---
 
 ## Project Structure
 
 ```
 HabitTracker/
-├── App.tsx                   # Root navigator (5 tabs)
+├── App.tsx                         # Root: auth state machine + bottom tab navigator
+├── firebase.json                   # Firebase Hosting config
+├── .firebaserc                     # Firebase project alias
 ├── src/
-│   ├── types/index.ts        # TypeScript types (Habit, Task, UserProfile)
-│   ├── theme.ts              # Colors, spacing, priority colors
 │   ├── components/
-│   │   └── AddHabitModal.tsx # Habit creation/edit form
+│   │   └── AddHabitModal.tsx       # Habit create/edit modal
 │   ├── screens/
-│   │   ├── OnboardingScreen.tsx
-│   │   ├── TodayScreen.tsx
-│   │   ├── HabitsScreen.tsx
-│   │   ├── TodoScreen.tsx
-│   │   ├── FocusScreen.tsx
-│   │   └── ProfileScreen.tsx
-│   └── utils/
-│       ├── storage.ts        # AsyncStorage helpers
-│       ├── habitUtils.ts     # Streak calculations
-│       ├── notifications.ts  # Push notification scheduling
-│       └── dateUtils.ts      # Date formatting helpers
-└── assets/                   # App icons and splash screen
+│   │   ├── AuthScreen.tsx          # Login / Sign up (email + password)
+│   │   ├── OnboardingScreen.tsx    # First-time name + habit selection
+│   │   ├── TodayScreen.tsx         # Daily checklist
+│   │   ├── HabitsScreen.tsx        # Habit management
+│   │   ├── TodoScreen.tsx          # Task management
+│   │   ├── FocusScreen.tsx         # Pomodoro + stopwatch
+│   │   ├── StatsScreen.tsx         # Progress analytics
+│   │   └── ProfileScreen.tsx       # Me tab
+│   ├── utils/
+│   │   ├── firebase.ts             # Firebase app, db, auth exports
+│   │   ├── cloudStorage.ts         # Firestore read/write
+│   │   ├── storage.ts              # AsyncStorage helpers
+│   │   ├── notifications.ts        # Push notification scheduling
+│   │   ├── habitUtils.ts           # Streak calculations
+│   │   └── dateUtils.ts            # Date helpers
+│   ├── types/
+│   │   └── index.ts                # TypeScript interfaces (Habit, Task, UserProfile)
+│   └── theme.ts                    # Colors, spacing, preset habit library
+└── assets/                         # App icon and splash screen
 ```
+
+---
+
+## Running Locally
+
+```bash
+# Install dependencies
+npm install
+
+# Start dev server in browser
+npx expo start --web
+
+# Build for production
+npx expo export --platform web
+
+# Deploy to Firebase
+firebase deploy
+```
+
+**Requirements:**
+- Node.js 18+
+- Firebase CLI: `npm install -g firebase-tools`
+- Firebase project with Firestore + Authentication (Email/Password) enabled
+
+---
+
+## Firebase Setup
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable **Firestore Database**
+3. Enable **Authentication → Sign-in method → Email/Password**
+4. Copy your config object into `src/utils/firebase.ts`
+5. Run `firebase login` then `firebase deploy`
+
+---
 
 ## Version
 
-**v2.0** — April 2026
+**v3.0** — April 2026 · Built with Expo + Firebase

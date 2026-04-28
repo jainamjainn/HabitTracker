@@ -331,9 +331,10 @@ function AddTaskModal({
     { label: 'No Date', value: null as string | null },
     { label: 'Today', value: today },
     { label: 'Tomorrow', value: dateOffset(1) },
-    { label: 'In 3 Days', value: dateOffset(3) },
-    { label: 'Next Week', value: dateOffset(7) },
+    { label: 'Custom', value: 'custom' as string | null },
   ];
+
+  const [customDateInput, setCustomDateInput] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -343,6 +344,7 @@ function AddTaskModal({
       setUrgent(task.urgent);
       setImportant(task.important);
       setDueDate(task.dueDate);
+      setCustomDateInput(task.dueDate ?? '');
     } else {
       setTitle('');
       setNotes('');
@@ -350,6 +352,7 @@ function AddTaskModal({
       setUrgent(false);
       setImportant(false);
       setDueDate(null);
+      setCustomDateInput('');
     }
   }, [task, visible]);
 
@@ -358,13 +361,25 @@ function AddTaskModal({
       Alert.alert('Missing title', 'Please enter a task title.');
       return;
     }
+    let finalDate = dueDate;
+    if (dueDate === 'custom') {
+      const trimmed = customDateInput.trim();
+      if (trimmed && /^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        finalDate = trimmed;
+      } else if (trimmed) {
+        Alert.alert('Invalid date', 'Use format YYYY-MM-DD, e.g. 2026-05-15');
+        return;
+      } else {
+        finalDate = null;
+      }
+    }
     onSave({
       title: title.trim(),
       notes: notes.trim(),
       priority,
       urgent,
       important,
-      dueDate,
+      dueDate: finalDate,
       completed: task?.completed ?? false,
       completedAt: task?.completedAt ?? null,
     });
@@ -467,7 +482,7 @@ function AddTaskModal({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: SPACING.md }}
+            style={{ marginBottom: SPACING.sm }}
           >
             {DATE_CHIPS.map(chip => (
               <TouchableOpacity
@@ -483,6 +498,17 @@ function AddTaskModal({
               </TouchableOpacity>
             ))}
           </ScrollView>
+          {dueDate === 'custom' && (
+            <TextInput
+              style={[mStyles.input, { marginBottom: SPACING.md }]}
+              value={customDateInput}
+              onChangeText={setCustomDateInput}
+              placeholder="YYYY-MM-DD  e.g. 2026-05-15"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+          )}
 
           <View style={mStyles.btnRow}>
             <TouchableOpacity style={mStyles.cancelBtn} onPress={onClose}>

@@ -10,6 +10,7 @@ import {
   AppState,
   AppStateStatus,
   Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme';
@@ -33,6 +34,8 @@ function formatTime(seconds: number): string {
 export default function FocusScreen() {
   const [mode, setMode] = useState<FocusMode>('pomo');
   const [pomoDuration, setPomoDuration] = useState(25);
+  const [customMinInput, setCustomMinInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const [seconds, setSeconds] = useState(25 * 60);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -172,18 +175,55 @@ export default function FocusScreen() {
 
       {/* Duration picker — pomo only, only when not running */}
       {mode === 'pomo' && !running && !finished && (
-        <View style={styles.durationRow}>
-          {POMO_OPTIONS.map(d => (
+        <View>
+          <View style={styles.durationRow}>
+            {POMO_OPTIONS.map(d => (
+              <TouchableOpacity
+                key={d}
+                onPress={() => { setPomoDuration(d); setShowCustomInput(false); }}
+                style={[styles.durationBtn, pomoDuration === d && !showCustomInput && styles.durationBtnActive]}
+              >
+                <Text style={[styles.durationText, pomoDuration === d && !showCustomInput && styles.durationTextActive]}>
+                  {d}m
+                </Text>
+              </TouchableOpacity>
+            ))}
             <TouchableOpacity
-              key={d}
-              onPress={() => setPomoDuration(d)}
-              style={[styles.durationBtn, pomoDuration === d && styles.durationBtnActive]}
+              onPress={() => setShowCustomInput(v => !v)}
+              style={[styles.durationBtn, showCustomInput && styles.durationBtnActive]}
             >
-              <Text style={[styles.durationText, pomoDuration === d && styles.durationTextActive]}>
-                {d}m
+              <Text style={[styles.durationText, showCustomInput && styles.durationTextActive]}>
+                Custom
               </Text>
             </TouchableOpacity>
-          ))}
+          </View>
+          {showCustomInput && (
+            <View style={styles.customInputRow}>
+              <TextInput
+                style={styles.customInput}
+                value={customMinInput}
+                onChangeText={setCustomMinInput}
+                placeholder="mins"
+                placeholderTextColor={COLORS.textLight}
+                keyboardType="number-pad"
+                maxLength={3}
+              />
+              <TouchableOpacity
+                style={styles.customSetBtn}
+                onPress={() => {
+                  const mins = parseInt(customMinInput, 10);
+                  if (!isNaN(mins) && mins > 0 && mins <= 180) {
+                    setPomoDuration(mins);
+                    setShowCustomInput(false);
+                  } else {
+                    Alert.alert('Invalid', 'Enter 1–180 minutes');
+                  }
+                }}
+              >
+                <Text style={styles.customSetBtnText}>Set</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
@@ -311,10 +351,30 @@ const styles = StyleSheet.create({
   durationRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
-    marginBottom: SPACING.lg,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.sm,
     paddingHorizontal: SPACING.md,
   },
+  customInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  customInput: {
+    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 12,
+    paddingHorizontal: SPACING.md, paddingVertical: 10,
+    fontSize: 18, fontWeight: '700', color: COLORS.text,
+    textAlign: 'center', width: 90,
+  },
+  customSetBtn: {
+    backgroundColor: COLORS.primary, borderRadius: 12,
+    paddingHorizontal: SPACING.lg, paddingVertical: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  customSetBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   durationBtn: {
     paddingHorizontal: 18, paddingVertical: 9,
     borderRadius: 20, backgroundColor: '#F3F4F6',

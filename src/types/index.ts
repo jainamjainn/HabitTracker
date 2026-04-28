@@ -1,3 +1,6 @@
+export type HabitType = 'build' | 'quit';
+export type TimeRange = 'anytime' | 'morning' | 'afternoon' | 'evening';
+
 export interface Habit {
   id: string;
   name: string;
@@ -8,6 +11,8 @@ export interface Habit {
   reminderDays: number[]; // 0=Sun..6=Sat, empty = every day
   notificationIds: string[];
   streakGoal: number; // target streak in days, default 30
+  habitType: HabitType;
+  timeRange: TimeRange;
   createdAt: string;
 }
 
@@ -32,5 +37,6 @@ export interface Task {
 
 export interface UserProfile {
   name: string;
+  email: string;
   joinedAt: string;
 }

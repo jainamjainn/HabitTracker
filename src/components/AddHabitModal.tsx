@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Habit } from '../types';
+import { Habit, HabitType, TimeRange } from '../types';
 import { COLORS, HABIT_COLORS, HABIT_EMOJIS, SPACING } from '../theme';
 
 type HabitFormData = Omit<Habit, 'id' | 'notificationIds' | 'createdAt'>;
@@ -32,6 +32,8 @@ export default function AddHabitModal({ visible, habit, onSave, onClose }: Props
   const [emoji, setEmoji] = useState('💪');
   const [color, setColor] = useState(HABIT_COLORS[0]);
   const [motivationText, setMotivationText] = useState('');
+  const [habitType, setHabitType] = useState<HabitType>('build');
+  const [timeRange, setTimeRange] = useState<TimeRange>('anytime');
   const [reminderOn, setReminderOn] = useState(false);
   const [hour, setHour] = useState('08');
   const [minute, setMinute] = useState('00');
@@ -45,6 +47,8 @@ export default function AddHabitModal({ visible, habit, onSave, onClose }: Props
       setEmoji(habit.emoji);
       setColor(habit.color);
       setMotivationText(habit.motivationText ?? '');
+      setHabitType(habit.habitType ?? 'build');
+      setTimeRange(habit.timeRange ?? 'anytime');
       setReminderDays(habit.reminderDays ?? []);
       setStreakGoal(habit.streakGoal ?? 30);
       setGoalInput(String(habit.streakGoal ?? 30));
@@ -63,6 +67,8 @@ export default function AddHabitModal({ visible, habit, onSave, onClose }: Props
       setEmoji('💪');
       setColor(HABIT_COLORS[0]);
       setMotivationText('');
+      setHabitType('build');
+      setTimeRange('anytime');
       setReminderOn(false);
       setHour('08');
       setMinute('00');
@@ -101,6 +107,8 @@ export default function AddHabitModal({ visible, habit, onSave, onClose }: Props
       emoji,
       color,
       motivationText: motivationText.trim() || null,
+      habitType,
+      timeRange,
       reminderTime: reminderOn
         ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
         : null,
@@ -147,6 +155,42 @@ export default function AddHabitModal({ visible, habit, onSave, onClose }: Props
             placeholderTextColor={COLORS.textLight}
             maxLength={80}
           />
+
+          {/* Habit Type */}
+          <Text style={styles.label}>Habit Type</Text>
+          <View style={styles.typeToggle}>
+            {(['build', 'quit'] as HabitType[]).map(t => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setHabitType(t)}
+                style={[styles.typeBtn, habitType === t && { backgroundColor: color }]}
+              >
+                <Text style={[styles.typeBtnText, habitType === t && styles.typeBtnTextActive]}>
+                  {t === 'build' ? '🔨 Build' : '🚫 Quit'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Time Range */}
+          <Text style={styles.label}>Time of Day</Text>
+          <View style={styles.timeRangeRow}>
+            {(['anytime', 'morning', 'afternoon', 'evening'] as TimeRange[]).map(t => {
+              const icons: Record<TimeRange, string> = { anytime: '🕐', morning: '🌅', afternoon: '☀️', evening: '🌙' };
+              return (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setTimeRange(t)}
+                  style={[styles.timeRangeBtn, timeRange === t && { backgroundColor: color, borderColor: color }]}
+                >
+                  <Text style={styles.timeRangeEmoji}>{icons[t]}</Text>
+                  <Text style={[styles.timeRangeTxt, timeRange === t && styles.timeRangeTxtActive]}>
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           {/* Emoji picker */}
           <Text style={styles.label}>Icon</Text>
@@ -347,6 +391,28 @@ const styles = StyleSheet.create({
   },
   colorDot: { width: 34, height: 34, borderRadius: 17 },
   colorDotActive: { borderWidth: 3, borderColor: COLORS.text },
+
+  typeToggle: {
+    flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md,
+  },
+  typeBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 14,
+    alignItems: 'center', backgroundColor: '#F3F4F6',
+  },
+  typeBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
+  typeBtnTextActive: { color: '#fff' },
+
+  timeRangeRow: {
+    flexDirection: 'row', gap: 6, marginBottom: SPACING.md, flexWrap: 'wrap',
+  },
+  timeRangeBtn: {
+    flex: 1, minWidth: 70, paddingVertical: 10, borderRadius: 14,
+    alignItems: 'center', backgroundColor: '#F3F4F6',
+    borderWidth: 1.5, borderColor: '#F3F4F6',
+  },
+  timeRangeEmoji: { fontSize: 18, marginBottom: 2 },
+  timeRangeTxt: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
+  timeRangeTxtActive: { color: '#fff' },
 
   // Streak goal
   goalPresetRow: {

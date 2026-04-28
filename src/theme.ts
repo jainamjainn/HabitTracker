@@ -40,19 +40,37 @@ export const PRIORITY_COLORS = {
   none: '#D1D5DB',
 };
 
-export const PRESET_HABITS = [
-  { name: 'Work Out', emoji: '🏋️' },
-  { name: 'Eat Healthy', emoji: '🥗' },
-  { name: 'Read Books', emoji: '📚' },
-  { name: 'Music', emoji: '🎵' },
-  { name: 'Art & Design', emoji: '🎨' },
-  { name: 'Running', emoji: '🏃' },
-  { name: 'Meditation', emoji: '🧘' },
-  { name: 'Gaming', emoji: '🎮' },
-  { name: 'Cycling', emoji: '🚴' },
-  { name: 'Swimming', emoji: '🏊' },
-  { name: 'Drink Water', emoji: '💧' },
-  { name: 'Sleep Early', emoji: '😴' },
+export type PresetCategory = 'Popular' | 'Health' | 'Sports';
+
+export const PRESET_HABITS: { name: string; emoji: string; category: PresetCategory }[] = [
+  // Popular
+  { name: 'Drink Water', emoji: '💧', category: 'Popular' },
+  { name: 'Sleep Early', emoji: '😴', category: 'Popular' },
+  { name: 'Meditation', emoji: '🧘', category: 'Popular' },
+  { name: 'Read Books', emoji: '📚', category: 'Popular' },
+  { name: 'Walk', emoji: '🚶', category: 'Popular' },
+  { name: 'Journaling', emoji: '✍️', category: 'Popular' },
+  { name: 'No Phone in Bed', emoji: '📵', category: 'Popular' },
+  { name: 'Music', emoji: '🎵', category: 'Popular' },
+  { name: 'Art & Design', emoji: '🎨', category: 'Popular' },
+  // Health
+  { name: 'Eat Healthy', emoji: '🥗', category: 'Health' },
+  { name: 'Take Vitamins', emoji: '💊', category: 'Health' },
+  { name: 'Skincare', emoji: '🧴', category: 'Health' },
+  { name: 'Brush Teeth', emoji: '🦷', category: 'Health' },
+  { name: 'No Junk Food', emoji: '🚫', category: 'Health' },
+  { name: 'Intermittent Fasting', emoji: '⏱️', category: 'Health' },
+  { name: 'Cold Shower', emoji: '🚿', category: 'Health' },
+  { name: 'Stretch', emoji: '🤸', category: 'Health' },
+  // Sports
+  { name: 'Work Out', emoji: '🏋️', category: 'Sports' },
+  { name: 'Running', emoji: '🏃', category: 'Sports' },
+  { name: 'Cycling', emoji: '🚴', category: 'Sports' },
+  { name: 'Swimming', emoji: '🏊', category: 'Sports' },
+  { name: 'Yoga', emoji: '🧘', category: 'Sports' },
+  { name: 'HIIT', emoji: '🔥', category: 'Sports' },
+  { name: 'Football', emoji: '⚽', category: 'Sports' },
+  { name: 'Basketball', emoji: '🏀', category: 'Sports' },
 ];
 
 export const HABIT_EMOJIS = [

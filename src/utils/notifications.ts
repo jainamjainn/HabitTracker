@@ -1,7 +1,10 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 
 export async function setupNotifications(): Promise<void> {
+  if (Platform.OS === 'web') return;
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -26,6 +29,7 @@ export async function scheduleHabitReminder(
   time: string,
   reminderDays: number[] = [] // 0=Sun..6=Sat, empty = every day
 ): Promise<string[]> {
+  if (Platform.OS === 'web') return [];
   const parts = time.split(':');
   const hours = parseInt(parts[0], 10);
   const minutes = parseInt(parts[1], 10);
@@ -72,6 +76,7 @@ export async function scheduleHabitReminder(
 }
 
 export async function cancelHabitReminders(notificationIds: string[]): Promise<void> {
+  if (Platform.OS === 'web') return;
   for (const id of notificationIds) {
     try {
       await Notifications.cancelScheduledNotificationAsync(id);
