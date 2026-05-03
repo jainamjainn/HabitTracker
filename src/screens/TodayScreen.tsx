@@ -10,15 +10,16 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Habit, HabitLog } from '../types';
-import { getHabits, getLogs, toggleHabitCompletion, getUserProfile } from '../utils/storage';
-import { getTodayKey, getLastNDays, getDayLabel, getGreeting } from '../utils/dateUtils';
+import { Habit, HabitLog, Task } from '../types';
+import { getHabits, getLogs, toggleHabitCompletion, getUserProfile, getTasks, saveTasks } from '../utils/storage';
+import { getTodayKey, getLastNDays, getDayLabel, getGreeting, getFirstName } from '../utils/dateUtils';
 import { getCurrentStreak } from '../utils/habitUtils';
-import { COLORS, SPACING } from '../theme';
+import { COLORS, PRIORITY_COLORS, SPACING } from '../theme';
 
 export default function TodayScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog>({});
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState(getTodayKey());
   const [userName, setUserName] = useState('');
 
@@ -28,9 +29,12 @@ export default function TodayScreen() {
   useFocusEffect(
     useCallback(() => {
       async function load() {
-        const [h, l, profile] = await Promise.all([getHabits(), getLogs(), getUserProfile()]);
+        const [h, l, t, profile] = await Promise.all([
+          getHabits(), getLogs(), getTasks(), getUserProfile(),
+        ]);
         setHabits(h);
         setLogs(l);
+        setTasks(t);
         setUserName(profile?.name ?? '');
       }
       load();
@@ -42,6 +46,16 @@ export default function TodayScreen() {
     setLogs(prev => ({ ...prev, [selectedDate]: updated }));
   }
 
+  async function handleToggleTask(task: Task) {
+    const updated = tasks.map(t =>
+      t.id === task.id
+        ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null }
+        : t
+    );
+    await saveTasks(updated);
+    setTasks(updated);
+  }
+
   const selectedDayOfWeek = new Date(selectedDate + 'T00:00:00').getDay();
   const todayHabits = habits.filter(
     h => h.reminderDays.length === 0 || h.reminderDays.includes(selectedDayOfWeek)
@@ -50,18 +64,27 @@ export default function TodayScreen() {
   const completedIds = logs[selectedDate] || [];
   const pendingHabits = todayHabits.filter(h => !completedIds.includes(h.id));
   const doneHabits = todayHabits.filter(h => completedIds.includes(h.id));
-  const allDone = todayHabits.length > 0 && pendingHabits.length === 0;
+  const allHabitsDone = todayHabits.length > 0 && pendingHabits.length === 0;
 
   const selectedDateObj = new Date(selectedDate + 'T00:00:00');
   const dayName = selectedDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-  const isViewingToday = selectedDate === today;
 
   const completionPct =
     todayHabits.length > 0
       ? Math.round((doneHabits.length / todayHabits.length) * 100)
       : 0;
 
-  function renderCard(item: Habit) {
+  // Tasks due today (only shown when viewing today)
+  const todayTasks = selectedDate === today
+    ? tasks.filter(t => !t.completed && (t.dueDate === today || !t.dueDate))
+    : [];
+  const overdueTasks = selectedDate === today
+    ? tasks.filter(t => !t.completed && t.dueDate && t.dueDate < today)
+    : [];
+
+  const firstName = getFirstName(userName);
+
+  function renderHabitCard(item: Habit) {
     const done = completedIds.includes(item.id);
     const streak = getCurrentStreak(item.id, logs, item.reminderDays);
     const goal = item.streakGoal ?? 30;
@@ -75,25 +98,15 @@ export default function TodayScreen() {
         activeOpacity={0.78}
         style={[styles.card, done && styles.cardDone]}
       >
-        {/* Translucent fill showing streak progress */}
-        <View
-          style={[
-            styles.cardFill,
-            { width: `${Math.max(progress * 100, 0)}%`, backgroundColor: color },
-          ]}
-        />
-        {/* Left accent strip */}
+        <View style={[styles.cardFill, { width: `${Math.max(progress * 100, 0)}%`, backgroundColor: color }]} />
         <View style={[styles.accentBar, { backgroundColor: color }]} />
-        {/* Main content */}
         <View style={styles.cardContent}>
           <View style={styles.cardRow}>
             <Text style={styles.emoji}>{item.emoji}</Text>
             <View style={styles.cardMid}>
               <Text style={[styles.habitName, done && styles.habitNameDone]}>{item.name}</Text>
               {item.motivationText ? (
-                <Text style={styles.motivText} numberOfLines={1}>
-                  {item.motivationText}
-                </Text>
+                <Text style={styles.motivText} numberOfLines={1}>{item.motivationText}</Text>
               ) : null}
             </View>
             {done ? (
@@ -106,15 +119,9 @@ export default function TodayScreen() {
               </View>
             ) : null}
           </View>
-          {/* Progress bar + label */}
           <View style={styles.progressRow}>
             <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progress * 100}%`, backgroundColor: color },
-                ]}
-              />
+              <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
             </View>
             <Text style={styles.progressLabel}>{streak}/{goal}d</Text>
           </View>
@@ -126,21 +133,38 @@ export default function TodayScreen() {
     );
   }
 
+  function renderTaskRow(task: Task, overdue = false) {
+    const priorityColor = PRIORITY_COLORS[task.priority];
+    return (
+      <TouchableOpacity
+        key={task.id}
+        onPress={() => handleToggleTask(task)}
+        activeOpacity={0.8}
+        style={[styles.taskRow, task.completed && styles.taskRowDone]}
+      >
+        <View style={[styles.checkCircle, task.completed && { backgroundColor: COLORS.success, borderColor: COLORS.success }]}>
+          {task.completed && <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>✓</Text>}
+        </View>
+        <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
+        <Text style={[styles.taskTitle, task.completed && styles.taskTitleDone]} numberOfLines={2}>
+          {overdue ? '⚠️ ' : ''}{task.title}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.greeting}>
-            {getGreeting()}{userName ? `, ${userName}` : ''}! 👋
+            {getGreeting()}{firstName ? `, ${firstName}` : ''}! 👋
           </Text>
           <Text style={styles.headerDate}>
             {selectedDateObj.toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
+              weekday: 'long', month: 'long', day: 'numeric',
             })}
           </Text>
         </View>
@@ -184,14 +208,20 @@ export default function TodayScreen() {
       </ScrollView>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* All done banner */}
-        {allDone && (
+        {/* All habits done banner */}
+        {allHabitsDone && (
           <View style={styles.allDoneBox}>
             <Text style={styles.allDoneEmoji}>🎉</Text>
-            <Text style={styles.allDoneText}>
-              All done{userName ? `, ${userName}` : ''}!
-            </Text>
+            <Text style={styles.allDoneText}>All done{firstName ? `, ${firstName}` : ''}!</Text>
             <Text style={styles.allDoneSubtext}>Great work — keep the streak alive!</Text>
+          </View>
+        )}
+
+        {/* Overdue tasks — shown as urgent reminder at top */}
+        {overdueTasks.length > 0 && (
+          <View style={[styles.taskSection, { borderLeftColor: COLORS.danger }]}>
+            <Text style={[styles.taskSectionTitle, { color: COLORS.danger }]}>⚠️ Overdue</Text>
+            {overdueTasks.map(t => renderTaskRow(t, true))}
           </View>
         )}
 
@@ -204,8 +234,16 @@ export default function TodayScreen() {
                 <Text style={styles.pendingBadgeText}>{pendingHabits.length} pending</Text>
               </View>
             </View>
-            <View style={styles.cardList}>{pendingHabits.map(h => renderCard(h))}</View>
+            <View style={styles.cardList}>{pendingHabits.map(h => renderHabitCard(h))}</View>
           </>
+        )}
+
+        {/* Today's tasks */}
+        {todayTasks.length > 0 && (
+          <View style={[styles.taskSection, { borderLeftColor: COLORS.primary }]}>
+            <Text style={[styles.taskSectionTitle, { color: COLORS.primary }]}>🎯 Today's Tasks</Text>
+            {todayTasks.map(t => renderTaskRow(t))}
+          </View>
         )}
 
         {/* Completed habits */}
@@ -215,19 +253,19 @@ export default function TodayScreen() {
               <Text style={styles.sectionTitle}>Completed</Text>
               <Text style={styles.doneCount}>{doneHabits.length} done ✓</Text>
             </View>
-            <View style={styles.cardList}>{doneHabits.map(h => renderCard(h))}</View>
+            <View style={styles.cardList}>{doneHabits.map(h => renderHabitCard(h))}</View>
           </>
         )}
 
         {/* Empty state */}
-        {todayHabits.length === 0 && (
+        {todayHabits.length === 0 && todayTasks.length === 0 && overdueTasks.length === 0 && (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>✨</Text>
-            <Text style={styles.emptyTitle}>No habits today</Text>
+            <Text style={styles.emptyTitle}>All clear!</Text>
             <Text style={styles.emptySubtext}>
               {habits.length === 0
-                ? 'Go to the Habits tab to add your first habit'
-                : 'No habits scheduled for this day'}
+                ? 'Go to Habits tab to add your first habit'
+                : 'No habits or tasks scheduled for this day'}
             </Text>
           </View>
         )}
@@ -239,12 +277,8 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.sm,
     backgroundColor: '#fff',
   },
   headerLeft: { flex: 1 },
@@ -253,132 +287,92 @@ const styles = StyleSheet.create({
   headerRight: { alignItems: 'center', marginLeft: SPACING.md },
   completionPct: { fontSize: 26, fontWeight: '800', color: COLORS.primary },
   completionLabel: { fontSize: 11, fontWeight: '600', color: '#888' },
+
   weekStrip: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm,
+    gap: SPACING.sm, backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
   dayItem: { alignItems: 'center', marginRight: SPACING.md },
   dayLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 6 },
   dayLabelActive: { color: COLORS.primary },
-  dayCircle: {
-    width: 38, height: 38, borderRadius: 19,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  dayCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dayCircleActive: { backgroundColor: COLORS.primary },
   dayNum: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
   dayNumActive: { color: '#fff' },
-  todayDot: {
-    width: 5, height: 5, borderRadius: 3,
-    backgroundColor: COLORS.primary, marginTop: 3,
-  },
-  scrollContent: { paddingTop: SPACING.md, paddingBottom: SPACING.xl },
+  todayDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: COLORS.primary, marginTop: 3 },
+
+  scrollContent: { paddingTop: SPACING.md, paddingBottom: 100 },
 
   allDoneBox: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primaryLight,
-    marginHorizontal: SPACING.md,
-    borderRadius: 20,
-    paddingVertical: SPACING.lg,
-    marginBottom: SPACING.md,
+    alignItems: 'center', backgroundColor: COLORS.primaryLight,
+    marginHorizontal: SPACING.md, borderRadius: 20,
+    paddingVertical: SPACING.lg, marginBottom: SPACING.md,
   },
   allDoneEmoji: { fontSize: 40, marginBottom: 6 },
   allDoneText: { fontSize: 18, fontWeight: '800', color: COLORS.primary, marginBottom: 4 },
   allDoneSubtext: { fontSize: 13, color: '#888' },
 
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SPACING.md, marginBottom: SPACING.sm,
   },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
-  pendingBadge: {
-    backgroundColor: '#FFF0E6',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
+  pendingBadge: { backgroundColor: '#FFF0E6', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
   pendingBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
   doneCount: { fontSize: 13, fontWeight: '600', color: COLORS.success },
-
   cardList: { paddingHorizontal: SPACING.md, marginBottom: SPACING.md },
 
-  // Habit card — rectangular with fill
+  // Task section inside today
+  taskSection: {
+    marginHorizontal: SPACING.md, marginBottom: SPACING.md,
+    backgroundColor: '#fff', borderRadius: 16,
+    padding: SPACING.md, borderLeftWidth: 4,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
+  },
+  taskSectionTitle: { fontSize: 13, fontWeight: '800', marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
+  taskRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+  },
+  taskRowDone: { opacity: 0.5 },
+  checkCircle: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: '#DDD',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  priorityDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
+  taskTitle: { fontSize: 14, fontWeight: '600', color: COLORS.text, flex: 1 },
+  taskTitleDone: { textDecorationLine: 'line-through', color: COLORS.textSecondary },
+
+  // Habit card
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginBottom: 10,
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden',
+    marginBottom: 10, flexDirection: 'row',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
   cardDone: { opacity: 0.7 },
-  cardFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    opacity: 0.13,
-  },
+  cardFill: { position: 'absolute', left: 0, top: 0, bottom: 0, opacity: 0.13 },
   accentBar: { width: 5, alignSelf: 'stretch' },
   cardContent: { flex: 1, padding: SPACING.md },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
+  cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
   emoji: { fontSize: 30, marginRight: SPACING.sm },
   cardMid: { flex: 1 },
   habitName: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
   habitNameDone: { color: '#888' },
-  motivText: {
-    fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2,
-  },
-  badge: {
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  streakBadge: {
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
+  motivText: { fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 2 },
+  badge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  streakBadge: { backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   streakBadgeText: { fontSize: 12, fontWeight: '700', color: '#1A1A1A' },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  progressTrack: {
-    flex: 1, height: 5,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  progressTrack: { flex: 1, height: 5, backgroundColor: '#F0F0F0', borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
-  progressLabel: {
-    fontSize: 11, fontWeight: '700', color: '#888',
-    minWidth: 38, textAlign: 'right',
-  },
+  progressLabel: { fontSize: 11, fontWeight: '700', color: '#888', minWidth: 38, textAlign: 'right' },
   timeText: { fontSize: 11, color: '#888', fontWeight: '500' },
 
-  empty: {
-    alignItems: 'center', paddingTop: 64, paddingHorizontal: SPACING.xl,
-  },
+  empty: { alignItems: 'center', paddingTop: 64, paddingHorizontal: SPACING.xl },
   emptyEmoji: { fontSize: 52, marginBottom: SPACING.md },
   emptyTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', marginBottom: SPACING.sm },
-  emptySubtext: {
-    fontSize: 15, color: '#888', textAlign: 'center', lineHeight: 22,
-  },
+  emptySubtext: { fontSize: 15, color: '#888', textAlign: 'center', lineHeight: 22 },
 });

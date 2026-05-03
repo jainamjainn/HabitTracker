@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   StatusBar,
   Modal,
@@ -15,38 +14,44 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { Task, TaskPriority } from '../types';
 import { getTasks, saveTasks } from '../utils/storage';
 import { getTodayKey } from '../utils/dateUtils';
 import { COLORS, PRIORITY_COLORS, SPACING } from '../theme';
 
-type ViewMode = 'list' | 'matrix';
-type Filter = 'all' | 'today' | 'done';
-
-const QUADRANT_INFO = {
-  1: { label: 'Urgent & Important', sub: 'Do First', bg: '#FEE2E2', border: '#EF4444', icon: '🔥' },
-  2: { label: 'Not Urgent, Important', sub: 'Schedule', bg: '#FEF3C7', border: '#F59E0B', icon: '📅' },
-  3: { label: 'Urgent, Unimportant', sub: 'Delegate', bg: '#DBEAFE', border: '#3B82F6', icon: '📤' },
-  4: { label: 'Not Urgent & Unimportant', sub: 'Eliminate', bg: '#D1FAE5', border: '#10B981', icon: '🗑️' },
-} as const;
+type Filter = 'active' | 'done';
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: 'High', medium: 'Med', low: 'Low', none: 'None',
 };
 
-function getQuadrant(task: Task): 1 | 2 | 3 | 4 {
-  if (task.urgent && task.important) return 1;
-  if (!task.urgent && task.important) return 2;
-  if (task.urgent && !task.important) return 3;
-  return 4;
+interface Section {
+  title: string;
+  emoji: string;
+  data: Task[];
+  color: string;
+}
+
+function buildSections(tasks: Task[], today: string): Section[] {
+  const active = tasks.filter(t => !t.completed);
+  const overdue = active.filter(t => t.dueDate && t.dueDate < today);
+  const todayTasks = active.filter(t => t.dueDate === today);
+  const upcoming = active.filter(t => t.dueDate && t.dueDate > today);
+  const someday = active.filter(t => !t.dueDate);
+
+  const sections: Section[] = [];
+  if (overdue.length) sections.push({ title: 'Overdue', emoji: '⚠️', data: overdue, color: COLORS.danger });
+  if (todayTasks.length) sections.push({ title: 'Today', emoji: '🎯', data: todayTasks, color: COLORS.primary });
+  if (upcoming.length) sections.push({ title: 'Upcoming', emoji: '📅', data: upcoming, color: '#8B5CF6' });
+  if (someday.length) sections.push({ title: 'Someday', emoji: '💭', data: someday, color: COLORS.textSecondary });
+  return sections;
 }
 
 export default function TodoScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('active');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -58,21 +63,10 @@ export default function TodoScreen() {
     }, [])
   );
 
-  function getFilteredTasks(): Task[] {
-    switch (filter) {
-      case 'today':
-        return tasks.filter(t => !t.completed && (t.dueDate === today || !t.dueDate));
-      case 'done':
-        return tasks.filter(t => t.completed);
-      default:
-        return tasks.filter(t => !t.completed);
-    }
-  }
-
   async function handleSave(data: Omit<Task, 'id' | 'createdAt'>) {
     let updated: Task[];
     if (editingTask) {
-      updated = tasks.map(t => (t.id === editingTask.id ? { ...editingTask, ...data } : t));
+      updated = tasks.map(t => t.id === editingTask.id ? { ...editingTask, ...data } : t);
     } else {
       const newTask: Task = {
         ...data,
@@ -106,8 +100,7 @@ export default function TodoScreen() {
     Alert.alert('Delete Task', `Delete "${task.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
-        style: 'destructive',
+        text: 'Delete', style: 'destructive',
         onPress: async () => {
           const updated = tasks.filter(t => t.id !== task.id);
           await saveTasks(updated);
@@ -117,104 +110,53 @@ export default function TodoScreen() {
     ]);
   }
 
-  function renderTaskRow(task: Task, compact = false) {
+  function renderTaskRow(task: Task) {
     const isOverdue = !task.completed && task.dueDate && task.dueDate < today;
     const priorityColor = PRIORITY_COLORS[task.priority];
     return (
-      <View key={task.id} style={[styles.taskRow, compact && styles.taskRowCompact]}>
+      <View key={task.id} style={styles.taskRow}>
         <TouchableOpacity onPress={() => handleToggleComplete(task)} style={styles.checkbox}>
-          {task.completed ? (
-            <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
-          ) : (
-            <Ionicons name="ellipse-outline" size={22} color="#CCC" />
-          )}
+          <View style={[styles.checkCircle, task.completed && { backgroundColor: COLORS.success, borderColor: COLORS.success }]}>
+            {task.completed && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>✓</Text>}
+          </View>
         </TouchableOpacity>
         <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
         <View style={styles.taskInfo}>
-          <Text
-            style={[styles.taskTitle, task.completed && styles.taskTitleDone]}
-            numberOfLines={compact ? 2 : 3}
-          >
+          <Text style={[styles.taskTitle, task.completed && styles.taskTitleDone]} numberOfLines={2}>
             {task.title}
           </Text>
-          {task.notes && !compact ? (
-            <Text style={styles.taskNotes} numberOfLines={1}>{task.notes}</Text>
-          ) : null}
-          {task.dueDate && !compact ? (
-            <Text style={[styles.dueDate, isOverdue ? styles.dueDateOverdue : null]}>
-              {isOverdue ? '⚠️ ' : '📅 '}{task.dueDate}
-            </Text>
-          ) : null}
-          {!compact && (task.urgent || task.important) ? (
-            <View style={styles.tagRow}>
-              {task.urgent ? <View style={styles.tag}><Text style={styles.tagText}>Urgent</Text></View> : null}
-              {task.important ? <View style={[styles.tag, styles.tagImportant]}><Text style={[styles.tagText, { color: COLORS.primary }]}>Important</Text></View> : null}
-            </View>
-          ) : null}
-        </View>
-        {!compact ? (
-          <View style={styles.taskActions}>
-            <TouchableOpacity onPress={() => handleEdit(task)} style={styles.iconBtn}>
-              <Ionicons name="pencil-outline" size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(task)} style={styles.iconBtn}>
-              <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-            </TouchableOpacity>
+          {task.notes ? <Text style={styles.taskNotes} numberOfLines={1}>{task.notes}</Text> : null}
+          <View style={styles.taskMeta}>
+            {task.dueDate ? (
+              <Text style={[styles.dueDate, isOverdue && styles.dueDateOverdue]}>
+                {isOverdue ? '⚠️' : '📅'} {task.dueDate}
+              </Text>
+            ) : null}
+            {task.priority !== 'none' ? (
+              <View style={[styles.priorityChipSmall, { borderColor: priorityColor }]}>
+                <Text style={[styles.priorityChipSmallText, { color: priorityColor }]}>
+                  {PRIORITY_LABELS[task.priority]}
+                </Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+        </View>
+        <View style={styles.taskActions}>
+          <TouchableOpacity onPress={() => handleEdit(task)} style={styles.iconBtn}>
+            <Text style={styles.iconBtnText}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDelete(task)} style={styles.iconBtn}>
+            <Text style={styles.iconBtnText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
-  function renderMatrixView() {
-    const activeTasks = tasks.filter(t => !t.completed);
-    return (
-      <ScrollView contentContainerStyle={styles.matrixContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.matrixHint}>Tasks are placed based on Urgent + Important toggles</Text>
-        <View style={styles.matrixGrid}>
-          {([1, 2, 3, 4] as const).map(q => {
-            const info = QUADRANT_INFO[q];
-            const qTasks = activeTasks.filter(t => getQuadrant(t) === q);
-            return (
-              <View
-                key={q}
-                style={[styles.quadrant, { backgroundColor: info.bg, borderColor: info.border }]}
-              >
-                <View style={styles.quadrantHeader}>
-                  <Text style={styles.quadrantIcon}>{info.icon}</Text>
-                  <View style={styles.quadrantHeaderText}>
-                    <Text style={[styles.quadrantSub, { color: info.border }]}>{info.sub}</Text>
-                    <Text style={styles.quadrantLabel}>{info.label}</Text>
-                  </View>
-                </View>
-                {qTasks.length === 0 ? (
-                  <Text style={styles.quadrantEmpty}>No tasks</Text>
-                ) : (
-                  qTasks.slice(0, 5).map(t => (
-                    <TouchableOpacity
-                      key={t.id}
-                      onPress={() => handleToggleComplete(t)}
-                      style={styles.matrixTask}
-                    >
-                      <Ionicons name="ellipse-outline" size={14} color={info.border} />
-                      <Text style={styles.matrixTaskText} numberOfLines={2}>{t.title}</Text>
-                    </TouchableOpacity>
-                  ))
-                )}
-                {qTasks.length > 5 ? (
-                  <Text style={[styles.quadrantEmpty, { marginTop: 4 }]}>+{qTasks.length - 5} more</Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
-    );
-  }
-
-  const filtered = getFilteredTasks();
+  const sections = buildSections(tasks, today);
+  const doneTasks = tasks.filter(t => t.completed);
   const activeCount = tasks.filter(t => !t.completed).length;
-  const doneCount = tasks.filter(t => t.completed).length;
+  const doneCount = doneTasks.length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -225,67 +167,64 @@ export default function TodoScreen() {
           <Text style={styles.headerTitle}>Tasks</Text>
           <Text style={styles.headerSub}>{activeCount} active · {doneCount} done</Text>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={[styles.viewToggle, viewMode === 'matrix' && styles.viewToggleActive]}
-            onPress={() => setViewMode(v => (v === 'list' ? 'matrix' : 'list'))}
-          >
-            <Ionicons
-              name={viewMode === 'matrix' ? 'list-outline' : 'grid-outline'}
-              size={19}
-              color={viewMode === 'matrix' ? COLORS.primary : COLORS.textSecondary}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => { setEditingTask(null); setModalVisible(true); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={26} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => { setEditingTask(null); setModalVisible(true); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.addBtnText}>+ Add</Text>
+        </TouchableOpacity>
       </View>
 
-      {viewMode === 'list' ? (
-        <>
-          <View style={styles.filterRow}>
-            {(['all', 'today', 'done'] as Filter[]).map(f => (
-              <TouchableOpacity
-                key={f}
-                onPress={() => setFilter(f)}
-                style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
-              >
-                <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-                  {f === 'all' ? `Active (${activeCount})` : f === 'today' ? 'Today' : `Done (${doneCount})`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      {/* Filter tabs */}
+      <View style={styles.filterRow}>
+        {(['active', 'done'] as Filter[]).map(f => (
+          <TouchableOpacity
+            key={f}
+            onPress={() => setFilter(f)}
+            style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
+          >
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+              {f === 'active' ? `Active (${activeCount})` : `Done (${doneCount})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-          <FlatList
-            data={filtered}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>{filter === 'done' ? '✅' : '🗒️'}</Text>
-                <Text style={styles.emptyTitle}>
-                  {filter === 'done' ? 'Nothing completed yet' : 'No tasks here!'}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {filter === 'done'
-                    ? 'Complete tasks to see them here'
-                    : 'Tap + to add your first task'}
-                </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {filter === 'active' ? (
+          sections.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>🗒️</Text>
+              <Text style={styles.emptyTitle}>No tasks yet!</Text>
+              <Text style={styles.emptySubtext}>Tap "+ Add" to create your first task</Text>
+            </View>
+          ) : (
+            sections.map(section => (
+              <View key={section.title} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionEmoji}>{section.emoji}</Text>
+                  <Text style={[styles.sectionTitle, { color: section.color }]}>{section.title}</Text>
+                  <View style={[styles.sectionBadge, { backgroundColor: section.color + '20' }]}>
+                    <Text style={[styles.sectionBadgeText, { color: section.color }]}>{section.data.length}</Text>
+                  </View>
+                </View>
+                {section.data.map(task => renderTaskRow(task))}
               </View>
-            }
-            renderItem={({ item }) => renderTaskRow(item)}
-          />
-        </>
-      ) : (
-        renderMatrixView()
-      )}
+            ))
+          )
+        ) : (
+          doneTasks.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>✅</Text>
+              <Text style={styles.emptyTitle}>Nothing completed yet</Text>
+              <Text style={styles.emptySubtext}>Complete tasks to see them here</Text>
+            </View>
+          ) : (
+            doneTasks.map(task => renderTaskRow(task))
+          )
+        )}
+      </ScrollView>
 
       <AddTaskModal
         visible={modalVisible}
@@ -297,15 +236,12 @@ export default function TodoScreen() {
   );
 }
 
-// ─── Add / Edit Task Modal ───────────────────────────────────────────────────
+// ─── Add / Edit Task Modal ────────────────────────────────────────────────────
 
 type TaskFormData = Omit<Task, 'id' | 'createdAt'>;
 
 function AddTaskModal({
-  visible,
-  task,
-  onSave,
-  onClose,
+  visible, task, onSave, onClose,
 }: {
   visible: boolean;
   task: Task | null;
@@ -318,6 +254,7 @@ function AddTaskModal({
   const [urgent, setUrgent] = useState(false);
   const [important, setImportant] = useState(false);
   const [dueDate, setDueDate] = useState<string | null>(null);
+  const [customDateInput, setCustomDateInput] = useState('');
 
   const today = getTodayKey();
 
@@ -333,8 +270,6 @@ function AddTaskModal({
     { label: 'Tomorrow', value: dateOffset(1) },
     { label: 'Custom', value: 'custom' as string | null },
   ];
-
-  const [customDateInput, setCustomDateInput] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -385,8 +320,6 @@ function AddTaskModal({
     });
   }
 
-  const q = urgent && important ? 1 : !urgent && important ? 2 : urgent && !important ? 3 : 4;
-
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <KeyboardAvoidingView
@@ -410,11 +343,10 @@ function AddTaskModal({
             placeholder="What needs to be done?"
             placeholderTextColor={COLORS.textLight}
             maxLength={120}
+            autoFocus={!task}
           />
 
-          <Text style={mStyles.label}>
-            Notes <Text style={mStyles.optional}>(optional)</Text>
-          </Text>
+          <Text style={mStyles.label}>Notes <Text style={mStyles.optional}>(optional)</Text></Text>
           <TextInput
             style={[mStyles.input, { height: 68, textAlignVertical: 'top', paddingTop: 12 }]}
             value={notes}
@@ -437,67 +369,27 @@ function AddTaskModal({
                   priority === p && { backgroundColor: PRIORITY_COLORS[p] },
                 ]}
               >
-                <Text
-                  style={[
-                    mStyles.priorityChipText,
-                    { color: priority === p ? '#fff' : PRIORITY_COLORS[p] },
-                  ]}
-                >
+                <Text style={[mStyles.priorityChipText, { color: priority === p ? '#fff' : PRIORITY_COLORS[p] }]}>
                   {PRIORITY_LABELS[p]}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={mStyles.label}>Eisenhower Matrix</Text>
-          <View style={mStyles.toggleRow}>
-            <View style={mStyles.toggleItem}>
-              <Text style={mStyles.toggleLabel}>🔴 Urgent</Text>
-              <Switch
-                value={urgent}
-                onValueChange={setUrgent}
-                trackColor={{ false: COLORS.border, true: '#EF4444' }}
-                thumbColor="#fff"
-              />
-            </View>
-            <View style={mStyles.toggleItem}>
-              <Text style={mStyles.toggleLabel}>⭐ Important</Text>
-              <Switch
-                value={important}
-                onValueChange={setImportant}
-                trackColor={{ false: COLORS.border, true: COLORS.primary }}
-                thumbColor="#fff"
-              />
-            </View>
-          </View>
-          {(urgent || important) && (
-            <View style={[mStyles.qHint, { backgroundColor: QUADRANT_INFO[q].bg }]}>
-              <Text style={[mStyles.qHintText, { color: QUADRANT_INFO[q].border }]}>
-                {QUADRANT_INFO[q].icon} {QUADRANT_INFO[q].sub} — {QUADRANT_INFO[q].label}
-              </Text>
-            </View>
-          )}
-
           <Text style={mStyles.label}>Due Date</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: SPACING.sm }}
-          >
+          <View style={mStyles.dateChipRow}>
             {DATE_CHIPS.map(chip => (
               <TouchableOpacity
                 key={chip.label}
                 onPress={() => setDueDate(chip.value)}
                 style={[mStyles.dateChip, dueDate === chip.value && mStyles.dateChipActive]}
               >
-                <Text
-                  style={[mStyles.dateChipText, dueDate === chip.value && mStyles.dateChipTextActive]}
-                >
+                <Text style={[mStyles.dateChipText, dueDate === chip.value && mStyles.dateChipTextActive]}>
                   {chip.label}
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
           {dueDate === 'custom' && (
             <TextInput
               style={[mStyles.input, { marginBottom: SPACING.md }]}
@@ -537,33 +429,42 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 30, fontWeight: '800', color: COLORS.text },
   headerSub: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500', marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  viewToggle: {
-    width: 40, height: 40, borderRadius: 13,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-  },
-  viewToggleActive: { backgroundColor: COLORS.primaryLight },
   addBtn: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderRadius: 22, backgroundColor: COLORS.primary,
   },
+  addBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     gap: SPACING.sm,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   filterBtn: {
-    paddingHorizontal: 14, paddingVertical: 7,
+    paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: 20, backgroundColor: '#F3F4F6',
   },
   filterBtnActive: { backgroundColor: COLORS.primary },
   filterText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
   filterTextActive: { color: '#fff' },
-  list: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: SPACING.xl },
+
+  scrollContent: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: 80 },
+
+  section: { marginBottom: SPACING.lg },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: SPACING.sm,
+  },
+  sectionEmoji: { fontSize: 18 },
+  sectionTitle: { fontSize: 16, fontWeight: '800' },
+  sectionBadge: {
+    paddingHorizontal: 10, paddingVertical: 2, borderRadius: 12,
+  },
+  sectionBadgeText: { fontSize: 12, fontWeight: '700' },
+
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -577,55 +478,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  taskRowCompact: {
-    padding: SPACING.sm,
-    marginBottom: 4,
-    borderRadius: 10,
-    shadowOpacity: 0,
-    elevation: 0,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+  checkbox: { marginRight: SPACING.sm, paddingTop: 2 },
+  checkCircle: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: '#DDD',
+    alignItems: 'center', justifyContent: 'center',
   },
-  checkbox: { marginRight: SPACING.sm, paddingTop: 1 },
-  priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: SPACING.sm, marginTop: 7 },
+  priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: SPACING.sm, marginTop: 6 },
   taskInfo: { flex: 1 },
   taskTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text, lineHeight: 20 },
   taskTitleDone: { textDecorationLine: 'line-through', color: COLORS.textSecondary },
   taskNotes: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  dueDate: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4, fontWeight: '500' },
+  taskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' },
+  dueDate: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '500' },
   dueDateOverdue: { color: COLORS.danger },
-  tagRow: { flexDirection: 'row', gap: 6, marginTop: 5 },
-  tag: {
+  priorityChipSmall: {
     paddingHorizontal: 8, paddingVertical: 2,
-    borderRadius: 8, backgroundColor: '#FEE2E2',
+    borderRadius: 8, borderWidth: 1,
   },
-  tagImportant: { backgroundColor: COLORS.primaryLight },
-  tagText: { fontSize: 10, fontWeight: '700', color: '#EF4444' },
-  taskActions: { flexDirection: 'row', gap: 2, paddingTop: 2 },
-  iconBtn: { padding: 6 },
-
-  // Matrix
-  matrixContainer: { padding: SPACING.md, paddingBottom: SPACING.xl },
-  matrixHint: {
-    fontSize: 12, color: COLORS.textSecondary, fontWeight: '600',
-    textAlign: 'center', marginBottom: SPACING.md,
-  },
-  matrixGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  quadrant: {
-    width: '48%',
-    borderRadius: 18, borderWidth: 1.5,
-    padding: SPACING.md, minHeight: 180,
-  },
-  quadrantHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: SPACING.sm },
-  quadrantIcon: { fontSize: 22 },
-  quadrantHeaderText: { flex: 1 },
-  quadrantSub: { fontSize: 13, fontWeight: '800' },
-  quadrantLabel: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '600', marginTop: 1 },
-  quadrantEmpty: { fontSize: 11, color: COLORS.textLight, textAlign: 'center', marginTop: 12 },
-  matrixTask: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    gap: 6, marginBottom: 6,
-  },
-  matrixTaskText: { fontSize: 12, fontWeight: '600', color: COLORS.text, flex: 1, lineHeight: 16 },
+  priorityChipSmallText: { fontSize: 10, fontWeight: '700' },
+  taskActions: { flexDirection: 'row', gap: 2, paddingTop: 0 },
+  iconBtn: { padding: 5 },
+  iconBtnText: { fontSize: 15 },
 
   empty: { alignItems: 'center', paddingTop: 80, paddingHorizontal: SPACING.xl },
   emptyEmoji: { fontSize: 52, marginBottom: SPACING.md },
@@ -661,18 +535,10 @@ const mStyles = StyleSheet.create({
     borderRadius: 20, borderWidth: 1.5,
   },
   priorityChipText: { fontSize: 13, fontWeight: '700' },
-  toggleRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
-  toggleItem: {
-    flex: 1, flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', backgroundColor: '#F8F8F8',
-    borderRadius: 14, padding: SPACING.md,
-  },
-  toggleLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text },
-  qHint: { borderRadius: 12, padding: SPACING.sm, marginBottom: SPACING.md },
-  qHintText: { fontSize: 13, fontWeight: '700' },
+  dateChipRow: { flexDirection: 'row', gap: 8, marginBottom: SPACING.md, flexWrap: 'wrap' },
   dateChip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#F5F5F5', marginRight: 8,
+    backgroundColor: '#F5F5F5',
   },
   dateChipActive: { backgroundColor: COLORS.primary },
   dateChipText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },

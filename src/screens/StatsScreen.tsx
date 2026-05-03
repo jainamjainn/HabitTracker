@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Habit, HabitLog } from '../types';
-import { getHabits, getLogs } from '../utils/storage';
+import { Habit, HabitLog, Task } from '../types';
+import { getHabits, getLogs, getTasks } from '../utils/storage';
 import { getLastNDays, getDayLabel, getTodayKey } from '../utils/dateUtils';
 import { getCurrentStreak, getLongestStreak, getMonthlyRate } from '../utils/habitUtils';
 import { COLORS, PASTEL_COLORS, SPACING } from '../theme';
@@ -30,13 +30,15 @@ function getHeatColor(count: number, habitCount: number): string {
 export default function StatsScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog>({});
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       async function load() {
-        const [h, l] = await Promise.all([getHabits(), getLogs()]);
+        const [h, l, t] = await Promise.all([getHabits(), getLogs(), getTasks()]);
         setHabits(h);
         setLogs(l);
+        setTasks(t);
       }
       load();
     }, [])
@@ -44,6 +46,11 @@ export default function StatsScreen() {
 
   const today = getTodayKey();
   const last7 = getLastNDays(7);
+
+  // Task stats
+  const activeTasks = tasks.filter(t => !t.completed).length;
+  const overdueTasks = tasks.filter(t => !t.completed && t.dueDate && t.dueDate < today).length;
+  const completedThisWeek = tasks.filter(t => t.completed && t.completedAt && t.completedAt.slice(0, 10) >= last7[0]).length;
   const heatmapDays = getLastNDays(HEATMAP_WEEKS * 7); // 98 days
   const maxPossible = habits.length || 1;
 
@@ -79,6 +86,24 @@ export default function StatsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+        {/* Task stats */}
+        <Text style={styles.sectionTitle}>Tasks</Text>
+        <View style={styles.taskStatsRow}>
+          <View style={styles.taskStatCard}>
+            <Text style={styles.taskStatValue}>{activeTasks}</Text>
+            <Text style={styles.taskStatLabel}>Active</Text>
+          </View>
+          <View style={styles.taskStatCard}>
+            <Text style={[styles.taskStatValue, { color: COLORS.success }]}>{completedThisWeek}</Text>
+            <Text style={styles.taskStatLabel}>Done this week</Text>
+          </View>
+          <View style={styles.taskStatCard}>
+            <Text style={[styles.taskStatValue, { color: overdueTasks > 0 ? COLORS.danger : COLORS.text }]}>{overdueTasks}</Text>
+            <Text style={styles.taskStatLabel}>Overdue</Text>
+          </View>
+        </View>
+
+        <Text style={[styles.sectionTitle, { marginTop: SPACING.sm }]}>Habits</Text>
         {/* Summary row */}
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
@@ -397,6 +422,34 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 2,
   },
+  taskStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  taskStatCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: SPACING.md,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  taskStatValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  taskStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -408,6 +461,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
   challengeItem: {
     flexDirection: 'row',

@@ -32,3 +32,8 @@ export function getTodayFormatted(): string {
     day: 'numeric',
   });
 }
+
+export function getFirstName(name: string): string {
+  if (!name) return '';
+  return name.trim().split(/\s+/)[0];
+}

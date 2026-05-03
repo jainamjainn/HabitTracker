@@ -24,14 +24,15 @@ import {
   clearAuthSession,
 } from '../utils/storage';
 import { getCurrentStreak, getLongestStreak, getMonthlyRate } from '../utils/habitUtils';
-import { getTodayKey, getLastNDays, getGreeting } from '../utils/dateUtils';
+import { getTodayKey, getLastNDays, getGreeting, getFirstName } from '../utils/dateUtils';
 import { COLORS, PASTEL_COLORS, SPACING } from '../theme';
 
 interface Props {
   onReset: () => void;
+  onOpenAI: () => void;
 }
 
-export default function ProfileScreen({ onReset }: Props) {
+export default function ProfileScreen({ onReset, onOpenAI }: Props) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog>({});
@@ -117,6 +118,7 @@ export default function ProfileScreen({ onReset }: Props) {
   const weekTotal = last7.reduce((acc, d) => acc + (logs[d]?.length ?? 0), 0);
 
   const displayName = profile?.name ?? '';
+  const firstName = getFirstName(displayName);
   const initials = displayName
     ? displayName
         .split(' ')
@@ -163,7 +165,7 @@ export default function ProfileScreen({ onReset }: Props) {
           ) : (
             <TouchableOpacity onPress={() => setEditingName(true)} style={styles.nameRow}>
               <Text style={styles.displayName}>
-                {displayName || 'Tap to set your name'}
+                {firstName || 'Tap to set your name'}
               </Text>
               <Ionicons name="pencil-outline" size={15} color={COLORS.textSecondary} style={{ marginLeft: 6 }} />
             </TouchableOpacity>
@@ -184,10 +186,10 @@ export default function ProfileScreen({ onReset }: Props) {
         </View>
 
         {/* Greeting banner */}
-        {displayName ? (
+        {firstName ? (
           <View style={styles.greetingBanner}>
             <Text style={styles.greetingText}>
-              {getGreeting()}, {displayName}! 💪 Keep crushing it.
+              {getGreeting()}, {firstName}! 💪 Keep crushing it.
             </Text>
           </View>
         ) : null}
@@ -302,6 +304,20 @@ export default function ProfileScreen({ onReset }: Props) {
         {/* Settings */}
         <Text style={styles.sectionTitle}>Settings</Text>
         <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={onOpenAI}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: COLORS.primaryLight }]}>
+              <Text style={{ fontSize: 18 }}>🤖</Text>
+            </View>
+            <Text style={styles.settingText}>AI Assistant</Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
           <TouchableOpacity
             style={styles.settingRow}
             onPress={() => setEditingName(true)}

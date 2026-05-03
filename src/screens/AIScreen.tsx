@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Habit, HabitLog, Task } from '../types';
@@ -27,6 +26,10 @@ interface Message {
   executed?: boolean;
 }
 
+interface Props {
+  onClose?: () => void;
+}
+
 const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
@@ -35,7 +38,6 @@ const WELCOME: Message = {
 
 const isWeb = Platform.OS === 'web';
 
-// ── Voice helpers (web only) ──────────────────────────────────────────────────
 function getSpeechRecognition(): any {
   if (!isWeb) return null;
   return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
@@ -48,7 +50,6 @@ function speak(text: string) {
   const utt = new SpeechSynthesisUtterance(clean);
   utt.rate = 1.05;
   utt.pitch = 1;
-  // Prefer a natural English voice if available
   const voices = window.speechSynthesis.getVoices();
   const preferred = voices.find(v => v.lang.startsWith('en') && v.localService);
   if (preferred) utt.voice = preferred;
@@ -59,9 +60,7 @@ function stopSpeaking() {
   if (isWeb && window.speechSynthesis) window.speechSynthesis.cancel();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function AIScreen() {
+export default function AIScreen({ onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,16 +73,18 @@ export default function AIScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const recognitionRef = useRef<any>(null);
 
+  function loadData() {
+    Promise.all([getHabits(), getLogs(), getTasks(), getUserProfile()]).then(([h, l, t, p]) => {
+      setHabits(h);
+      setLogs(l);
+      setTasks(t);
+      setUserName(p?.name ?? '');
+    });
+  }
+
   useFocusEffect(
     useCallback(() => {
-      async function load() {
-        const [h, l, t, p] = await Promise.all([getHabits(), getLogs(), getTasks(), getUserProfile()]);
-        setHabits(h);
-        setLogs(l);
-        setTasks(t);
-        setUserName(p?.name ?? '');
-      }
-      load();
+      loadData();
       return () => {
         stopListening();
         stopSpeaking();
@@ -91,23 +92,23 @@ export default function AIScreen() {
     }, [])
   );
 
+  // Also load when used as modal (no focus events)
+  useEffect(() => {
+    if (onClose) loadData();
+  }, []);
+
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
-  // ── Voice input ─────────────────────────────────────────────────────────────
   function startListening() {
     const SR = getSpeechRecognition();
-    if (!SR) {
-      Alert.alert('Not supported', 'Voice input needs Chrome or Safari. Try those browsers.');
-      return;
-    }
+    if (!SR) return;
     stopSpeaking();
     const rec = new SR();
     rec.continuous = false;
     rec.interimResults = false;
     rec.lang = 'en-US';
-
     rec.onstart = () => setListening(true);
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);
@@ -116,7 +117,6 @@ export default function AIScreen() {
       setListening(false);
       sendText(transcript);
     };
-
     recognitionRef.current = rec;
     rec.start();
   }
@@ -132,7 +132,6 @@ export default function AIScreen() {
     startListening();
   }
 
-  // ── Send message ─────────────────────────────────────────────────────────────
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
@@ -161,6 +160,16 @@ export default function AIScreen() {
       };
       setMessages(prev => [...prev, aiMsg]);
 
+      // Auto-execute all actions silently
+      if (actions.length > 0) {
+        for (const action of actions) {
+          await doAction(action);
+        }
+        setMessages(prev =>
+          prev.map(m => m.id === aiMsg.id ? { ...m, executed: true } : m)
+        );
+      }
+
       if (ttsEnabled) speak(aiText);
     } catch {
       const errMsg: Message = {
@@ -174,11 +183,9 @@ export default function AIScreen() {
     }
   }
 
-  // ── Execute action ────────────────────────────────────────────────────────────
-  async function executeAction(msgId: string, action: AIAction) {
+  async function doAction(action: AIAction) {
     try {
       const p = action.payload;
-
       if (action.type === 'create_habit') {
         const newHabit: Habit = {
           id: Date.now().toString(),
@@ -197,10 +204,7 @@ export default function AIScreen() {
         const updated = [...habits, newHabit];
         await saveHabits(updated);
         setHabits(updated);
-        Alert.alert('✅ Habit created!', `"${newHabit.emoji} ${newHabit.name}" added to your habits.`);
-      }
-
-      if (action.type === 'create_task') {
+      } else if (action.type === 'create_task') {
         const newTask: Task = {
           id: Date.now().toString(),
           title: p.title ?? 'New Task',
@@ -208,7 +212,7 @@ export default function AIScreen() {
           priority: p.priority ?? 'none',
           urgent: false,
           important: false,
-          dueDate: null,
+          dueDate: p.dueDate ?? null,
           completed: false,
           completedAt: null,
           createdAt: new Date().toISOString(),
@@ -216,41 +220,24 @@ export default function AIScreen() {
         const updated = [newTask, ...tasks];
         await saveTasks(updated);
         setTasks(updated);
-        Alert.alert('✅ Task added!', `"${newTask.title}" added to your tasks.`);
-      }
-
-      if (action.type === 'edit_habit') {
+      } else if (action.type === 'edit_habit') {
         const updated = habits.map(h => h.id === p.id ? { ...h, ...p } : h);
         await saveHabits(updated);
         setHabits(updated);
-        Alert.alert('✅ Habit updated!', `"${p.name ?? 'Habit'}" has been updated.`);
-      }
-
-      if (action.type === 'edit_task') {
+      } else if (action.type === 'edit_task') {
         const updated = tasks.map(t => t.id === p.id ? { ...t, ...p } : t);
         await saveTasks(updated);
         setTasks(updated);
-        Alert.alert('✅ Task updated!', `"${p.title ?? 'Task'}" has been updated.`);
-      }
-
-      if (action.type === 'delete_habit') {
+      } else if (action.type === 'delete_habit') {
         const updated = habits.filter(h => h.id !== p.id);
         await saveHabits(updated);
         setHabits(updated);
-        Alert.alert('🗑️ Habit deleted', `"${p.name ?? 'Habit'}" removed.`);
-      }
-
-      if (action.type === 'delete_task') {
+      } else if (action.type === 'delete_task') {
         const updated = tasks.filter(t => t.id !== p.id);
         await saveTasks(updated);
         setTasks(updated);
-        Alert.alert('🗑️ Task deleted', `"${p.title ?? 'Task'}" removed.`);
       }
-
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, executed: true } : m));
-    } catch {
-      Alert.alert('Error', 'Could not complete that action. Try again.');
-    }
+    } catch {}
   }
 
   function handleClearChat() {
@@ -259,10 +246,9 @@ export default function AIScreen() {
     setMessages([WELCOME]);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      {!onClose && <StatusBar barStyle="dark-content" backgroundColor="#fff" />}
 
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -284,6 +270,11 @@ export default function AIScreen() {
           <TouchableOpacity style={styles.clearBtn} onPress={handleClearChat}>
             <Text style={styles.clearBtnText}>Clear</Text>
           </TouchableOpacity>
+          {onClose && (
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -311,41 +302,17 @@ export default function AIScreen() {
                 </View>
               </View>
 
-              {msg.actions && msg.actions.length > 0 && !msg.executed && (
-                <View style={styles.actionCards}>
+              {msg.actions && msg.actions.length > 0 && msg.executed && (
+                <View style={styles.executedBadge}>
                   {msg.actions.map((action, i) => {
-                    const meta: Record<AIAction['type'], { emoji: string; label: string; name: string; tap: string }> = {
-                      create_habit: { emoji: '💪', label: 'Create Habit',  name: `${action.payload.emoji ?? ''} ${action.payload.name ?? ''}`,  tap: 'Tap to add →' },
-                      create_task:  { emoji: '✅', label: 'Add Task',      name: action.payload.title ?? '',                                       tap: 'Tap to add →' },
-                      edit_habit:   { emoji: '✏️', label: 'Edit Habit',    name: action.payload.name ?? '',                                        tap: 'Tap to save →' },
-                      edit_task:    { emoji: '✏️', label: 'Edit Task',     name: action.payload.title ?? '',                                       tap: 'Tap to save →' },
-                      delete_habit: { emoji: '🗑️', label: 'Delete Habit',  name: action.payload.name ?? '',                                        tap: 'Tap to delete →' },
-                      delete_task:  { emoji: '🗑️', label: 'Delete Task',   name: action.payload.title ?? '',                                       tap: 'Tap to delete →' },
-                    };
-                    const m = meta[action.type];
                     const isDelete = action.type.startsWith('delete');
+                    const name = action.payload.name ?? action.payload.title ?? '';
+                    const emoji = action.type.includes('habit') ? '💪' : '✅';
+                    const verb = isDelete ? '🗑️ Deleted' : action.type.startsWith('edit') ? '✏️ Updated' : '✅ Added';
                     return (
-                      <TouchableOpacity
-                        key={i}
-                        style={[styles.actionCard, isDelete && styles.actionCardDanger]}
-                        onPress={() => executeAction(msg.id, action)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.actionCardEmoji}>{m.emoji}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.actionCardLabel, isDelete && { color: COLORS.danger }]}>{m.label}</Text>
-                          <Text style={styles.actionCardName}>{m.name}</Text>
-                        </View>
-                        <Text style={[styles.actionCardTap, isDelete && { color: COLORS.danger }]}>{m.tap}</Text>
-                      </TouchableOpacity>
+                      <Text key={i} style={styles.executedText}>{verb} {emoji} {name}</Text>
                     );
                   })}
-                </View>
-              )}
-
-              {msg.actions && msg.executed && (
-                <View style={styles.executedBadge}>
-                  <Text style={styles.executedText}>✓ Done</Text>
                 </View>
               )}
             </View>
@@ -361,7 +328,6 @@ export default function AIScreen() {
           )}
         </ScrollView>
 
-        {/* Quick prompts — only on first message */}
         {messages.length === 1 && (
           <ScrollView
             horizontal
@@ -384,7 +350,6 @@ export default function AIScreen() {
         )}
 
         <View style={styles.inputRow}>
-          {/* Mic button */}
           {isWeb && (
             <TouchableOpacity
               style={[styles.micBtn, listening && styles.micBtnActive]}
@@ -457,6 +422,11 @@ const styles = StyleSheet.create({
   headerBtnText: { fontSize: 18 },
   clearBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: '#F3F4F6' },
   clearBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  closeBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.textSecondary },
 
   messages: { flex: 1 },
   messagesContent: { padding: SPACING.md, paddingBottom: SPACING.lg },
@@ -479,20 +449,7 @@ const styles = StyleSheet.create({
   userBubbleText: { color: '#fff', fontWeight: '500' },
   aiBubbleText: { color: COLORS.text, fontWeight: '500' },
 
-  actionCards: { marginLeft: 36, marginBottom: 8, gap: 8 },
-  actionCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    borderWidth: 1.5, borderColor: COLORS.primary,
-    shadowColor: COLORS.primary, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2,
-  },
-  actionCardDanger: { borderColor: COLORS.danger, shadowColor: COLORS.danger },
-  actionCardEmoji: { fontSize: 24 },
-  actionCardLabel: { fontSize: 11, fontWeight: '700', color: COLORS.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  actionCardName: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginTop: 1 },
-  actionCardTap: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
-
-  executedBadge: { marginLeft: 36, marginBottom: 8 },
+  executedBadge: { marginLeft: 36, marginBottom: 8, gap: 2 },
   executedText: { fontSize: 12, fontWeight: '600', color: COLORS.success },
 
   quickRow: { maxHeight: 44, marginBottom: SPACING.sm },
