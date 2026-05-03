@@ -76,7 +76,7 @@ export default function TodayScreen() {
 
   // Tasks due today (only shown when viewing today)
   const todayTasks = selectedDate === today
-    ? tasks.filter(t => !t.completed && (t.dueDate === today || !t.dueDate))
+    ? tasks.filter(t => !t.completed && t.dueDate === today)
     : [];
   const overdueTasks = selectedDate === today
     ? tasks.filter(t => !t.completed && t.dueDate && t.dueDate < today)
