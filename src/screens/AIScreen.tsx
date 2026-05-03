@@ -15,7 +15,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Habit, HabitLog, Task } from '../types';
 import { getHabits, getLogs, getTasks, saveTasks, saveHabits, getUserProfile } from '../utils/storage';
-import { startOrGetChat, parseAIResponse, resetChat, AIAction } from '../utils/gemini';
+import { sendChatMessage, parseAIResponse, resetChat, AIAction } from '../utils/gemini';
 import { COLORS, SPACING } from '../theme';
 
 interface Message {
@@ -147,9 +147,7 @@ export default function AIScreen({ onClose }: Props) {
     setLoading(true);
 
     try {
-      const chat = startOrGetChat(habits, logs, tasks, userName);
-      const result = await chat.sendMessage(text);
-      const raw = result.response.text();
+      const raw = await sendChatMessage(text, habits, logs, tasks, userName);
       const { text: aiText, actions } = parseAIResponse(raw);
 
       const aiMsg: Message = {

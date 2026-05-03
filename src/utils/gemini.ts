@@ -105,12 +105,13 @@ export function parseAIResponse(raw: string): ParsedResponse {
 let chatSession: ChatSession | null = null;
 let lastSystemPrompt = '';
 
-export function startOrGetChat(
+export async function sendChatMessage(
+  message: string,
   habits: Habit[],
   logs: HabitLog,
   tasks: Task[],
   userName: string
-): ChatSession {
+): Promise<string> {
   const systemPrompt = buildSystemPrompt(habits, logs, tasks, userName);
 
   if (!chatSession || lastSystemPrompt !== systemPrompt) {
@@ -122,7 +123,8 @@ export function startOrGetChat(
     lastSystemPrompt = systemPrompt;
   }
 
-  return chatSession;
+  const result = await chatSession.sendMessage(message);
+  return result.response.text();
 }
 
 export function resetChat() {

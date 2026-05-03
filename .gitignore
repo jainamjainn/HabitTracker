@@ -43,3 +43,7 @@ yarn-error.*
 
 # Firebase cache
 .firebase/
+
+# Functions build output and local deps (not committed)
+functions/node_modules/
+functions/lib/
