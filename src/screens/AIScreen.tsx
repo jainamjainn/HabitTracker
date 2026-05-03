@@ -96,8 +96,9 @@ export default function AIScreen() {
 
   async function executeAction(msgId: string, action: AIAction) {
     try {
+      const p = action.payload;
+
       if (action.type === 'create_habit') {
-        const p = action.payload;
         const newHabit: Habit = {
           id: Date.now().toString(),
           name: p.name ?? 'New Habit',
@@ -119,7 +120,6 @@ export default function AIScreen() {
       }
 
       if (action.type === 'create_task') {
-        const p = action.payload;
         const newTask: Task = {
           id: Date.now().toString(),
           title: p.title ?? 'New Task',
@@ -138,7 +138,42 @@ export default function AIScreen() {
         Alert.alert('✅ Task added!', `"${newTask.title}" added to your tasks.`);
       }
 
-      // Mark message action as executed
+      if (action.type === 'edit_habit') {
+        const updated = habits.map(h =>
+          h.id === p.id
+            ? { ...h, ...p }
+            : h
+        );
+        await saveHabits(updated);
+        setHabits(updated);
+        Alert.alert('✅ Habit updated!', `"${p.name ?? 'Habit'}" has been updated.`);
+      }
+
+      if (action.type === 'edit_task') {
+        const updated = tasks.map(t =>
+          t.id === p.id
+            ? { ...t, ...p }
+            : t
+        );
+        await saveTasks(updated);
+        setTasks(updated);
+        Alert.alert('✅ Task updated!', `"${p.title ?? 'Task'}" has been updated.`);
+      }
+
+      if (action.type === 'delete_habit') {
+        const updated = habits.filter(h => h.id !== p.id);
+        await saveHabits(updated);
+        setHabits(updated);
+        Alert.alert('🗑️ Habit deleted', `"${p.name ?? 'Habit'}" removed.`);
+      }
+
+      if (action.type === 'delete_task') {
+        const updated = tasks.filter(t => t.id !== p.id);
+        await saveTasks(updated);
+        setTasks(updated);
+        Alert.alert('🗑️ Task deleted', `"${p.title ?? 'Task'}" removed.`);
+      }
+
       setMessages(prev =>
         prev.map(m => m.id === msgId ? { ...m, executed: true } : m)
       );
@@ -208,29 +243,33 @@ export default function AIScreen() {
               {/* Action buttons */}
               {msg.actions && msg.actions.length > 0 && !msg.executed && (
                 <View style={styles.actionCards}>
-                  {msg.actions.map((action, i) => (
-                    <TouchableOpacity
-                      key={i}
-                      style={styles.actionCard}
-                      onPress={() => executeAction(msg.id, action)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.actionCardEmoji}>
-                        {action.type === 'create_habit' ? '💪' : '✅'}
-                      </Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.actionCardLabel}>
-                          {action.type === 'create_habit' ? 'Create Habit' : 'Add Task'}
-                        </Text>
-                        <Text style={styles.actionCardName}>
-                          {action.type === 'create_habit'
-                            ? `${action.payload.emoji ?? ''} ${action.payload.name ?? ''}`
-                            : action.payload.title ?? ''}
-                        </Text>
-                      </View>
-                      <Text style={styles.actionCardTap}>Tap to add →</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {msg.actions.map((action, i) => {
+                    const meta: Record<AIAction['type'], { emoji: string; label: string; name: string; tap: string }> = {
+                      create_habit: { emoji: '💪', label: 'Create Habit',  name: `${action.payload.emoji ?? ''} ${action.payload.name ?? ''}`,  tap: 'Tap to add →' },
+                      create_task:  { emoji: '✅', label: 'Add Task',      name: action.payload.title ?? '',                                       tap: 'Tap to add →' },
+                      edit_habit:   { emoji: '✏️', label: 'Edit Habit',    name: action.payload.name ?? '',                                        tap: 'Tap to save →' },
+                      edit_task:    { emoji: '✏️', label: 'Edit Task',     name: action.payload.title ?? '',                                       tap: 'Tap to save →' },
+                      delete_habit: { emoji: '🗑️', label: 'Delete Habit',  name: action.payload.name ?? '',                                        tap: 'Tap to delete →' },
+                      delete_task:  { emoji: '🗑️', label: 'Delete Task',   name: action.payload.title ?? '',                                       tap: 'Tap to delete →' },
+                    };
+                    const m = meta[action.type];
+                    const isDelete = action.type.startsWith('delete');
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        style={[styles.actionCard, isDelete && styles.actionCardDanger]}
+                        onPress={() => executeAction(msg.id, action)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.actionCardEmoji}>{m.emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.actionCardLabel, isDelete && { color: COLORS.danger }]}>{m.label}</Text>
+                          <Text style={styles.actionCardName}>{m.name}</Text>
+                        </View>
+                        <Text style={[styles.actionCardTap, isDelete && { color: COLORS.danger }]}>{m.tap}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
@@ -366,6 +405,7 @@ const styles = StyleSheet.create({
   actionCardLabel: { fontSize: 11, fontWeight: '700', color: COLORS.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
   actionCardName: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginTop: 1 },
   actionCardTap: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
+  actionCardDanger: { borderColor: COLORS.danger, shadowColor: COLORS.danger },
 
   executedBadge: { marginLeft: 36, marginBottom: 8 },
   executedText: { fontSize: 12, fontWeight: '600', color: COLORS.success },
