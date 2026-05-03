@@ -16,7 +16,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { setupNotifications } from './src/utils/notifications';
-import { isOnboarded, setUserEmail, setOnboarded, saveHabits, saveLogs, saveTasks, saveUserProfile } from './src/utils/storage';
+import { isOnboarded, setUserEmail, setOnboarded, saveHabits, saveLogs, saveTasks, saveUserProfile, getHabits } from './src/utils/storage';
 import { fetchUserByEmail } from './src/utils/cloudStorage';
 import { auth } from './src/utils/firebase';
 import { COLORS } from './src/theme';
@@ -68,7 +68,15 @@ export default function App() {
           await setOnboarded();
           setAppState('app');
         } else {
-          setAppState('onboarding');
+          // Cloud returned nothing — could be a sync failure, not necessarily a new user.
+          // If local habits exist the user has already been through onboarding on this device.
+          const localHabits = await getHabits();
+          if (localHabits.length > 0) {
+            await setOnboarded();
+            setAppState('app');
+          } else {
+            setAppState('onboarding');
+          }
         }
       });
     }

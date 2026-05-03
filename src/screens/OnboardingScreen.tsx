@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Habit } from '../types';
 import { saveHabits, setOnboarded, saveUserProfile, getUserEmail } from '../utils/storage';
+import { saveUserToCloud } from '../utils/cloudStorage';
 import { COLORS, PRESET_HABITS, SPACING } from '../theme';
 
 interface Props {
@@ -68,6 +69,9 @@ export default function OnboardingScreen({ onComplete }: Props) {
     });
     await saveHabits(habits);
     await setOnboarded();
+    // Mark user as onboarded in cloud so sign-out + sign-in restores correctly
+    const email = await getUserEmail();
+    if (email) await saveUserToCloud(email, { onboarded: true });
     onComplete();
   }
 

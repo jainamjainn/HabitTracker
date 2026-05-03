@@ -7,6 +7,7 @@ export interface CloudUserData {
   habits: Habit[];
   logs: HabitLog;
   tasks: Task[];
+  onboarded?: boolean;
 }
 
 function userDocId(email: string): string {
@@ -28,5 +29,7 @@ export async function saveUserToCloud(email: string, data: Partial<CloudUserData
   try {
     const ref = doc(db, 'users', userDocId(email));
     await setDoc(ref, data, { merge: true });
-  } catch {}
+  } catch (err) {
+    console.warn('[CloudStorage] saveUserToCloud failed:', err);
+  }
 }

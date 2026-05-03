@@ -5,12 +5,12 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   StatusBar,
   Modal,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Habit } from '../types';
@@ -134,7 +134,7 @@ export default function HabitsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Habits</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setPickerVisible(true)} activeOpacity={0.85}>
-          <Ionicons name="add" size={26} color="#fff" />
+          <Text style={styles.addBtnText}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -289,6 +289,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addBtnText: {
+    fontSize: 30,
+    color: '#fff',
+    fontWeight: '300',
+    lineHeight: 36,
+    includeFontPadding: false,
   },
   list: {
     paddingHorizontal: SPACING.md,

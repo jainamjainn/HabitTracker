@@ -316,8 +316,6 @@ export default function ProfileScreen({ onReset }: Props) {
 
           <View style={styles.divider} />
 
-          <View style={styles.divider} />
-
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleSignOut}
@@ -352,7 +350,7 @@ export default function ProfileScreen({ onReset }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { paddingBottom: 48 },
 
   profileCard: {

@@ -144,7 +144,7 @@ export default function TodayScreen() {
             })}
           </Text>
         </View>
-        {todayHabits.length > 0 && isViewingToday && (
+        {todayHabits.length > 0 && (
           <View style={styles.headerRight}>
             <Text style={styles.completionPct}>{completionPct}%</Text>
             <Text style={styles.completionLabel}>done</Text>
@@ -237,7 +237,7 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -258,6 +258,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     gap: SPACING.sm,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   dayItem: { alignItems: 'center', marginRight: SPACING.md },
   dayLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 6 },

@@ -1,12 +1,12 @@
 export const COLORS = {
   primary: '#FF6B35',
   primaryLight: '#FFF0E6',
-  background: '#FFFFFF',
+  background: '#FFF9F6',
   card: '#FFFFFF',
   text: '#1A1A1A',
   textSecondary: '#888888',
   textLight: '#BBBBBB',
-  border: '#F0F0F0',
+  border: '#EDE9E4',
   success: '#4CAF50',
   danger: '#EF4444',
 };

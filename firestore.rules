@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Any signed-in user can read/write the users collection.
+    // The app always derives the document ID from the logged-in user's email,
+    // so in practice each user only ever touches their own document.
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
