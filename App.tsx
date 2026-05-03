@@ -15,6 +15,7 @@ import StatsScreen from './src/screens/StatsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import AIScreen from './src/screens/AIScreen';
 import { setupNotifications } from './src/utils/notifications';
 import { isOnboarded, setUserEmail, setOnboarded, saveHabits, saveLogs, saveTasks, saveUserProfile, getHabits } from './src/utils/storage';
 import { fetchUserByEmail } from './src/utils/cloudStorage';
@@ -30,6 +31,7 @@ const TAB_EMOJIS: Record<string, string> = {
   Tasks: '✅',
   Focus: '🎯',
   Stats: '📊',
+  AI: '🤖',
   Me: '👤',
 };
 
@@ -133,6 +135,7 @@ export default function App() {
         <Tab.Screen name="Tasks" component={TodoScreen} />
         <Tab.Screen name="Focus" component={FocusScreen} />
         <Tab.Screen name="Stats" component={StatsScreen} />
+        <Tab.Screen name="AI" component={AIScreen} />
         <Tab.Screen
           name="Me"
           children={() => <ProfileScreen onReset={() => setAppState('auth')} />}
