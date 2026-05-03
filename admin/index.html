@@ -121,6 +121,10 @@
     <input id="pass-input" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
     <button class="login-btn" onclick="doLogin()">Sign In</button>
     <div class="login-err" id="login-err"></div>
+    <div style="text-align:center;margin-top:14px">
+      <a href="#" onclick="doReset();return false;" style="font-size:13px;color:#667eea;font-weight:600;text-decoration:none">Forgot password?</a>
+    </div>
+    <div id="reset-msg" style="display:none;text-align:center;margin-top:10px;font-size:13px;color:#16a34a;font-weight:600"></div>
   </div>
 </div>
 
@@ -171,7 +175,7 @@
 
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js';
-  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail }
     from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js';
   import { getFirestore, collection, getDocs }
     from 'https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js';
@@ -189,7 +193,7 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  const ADMIN_EMAIL = 'jainamr4csea@gmail.com';
+  const ADMIN_EMAIL = 'jainamj7@gmail.com';
 
   window.doLogin = async () => {
     const email = document.getElementById('email-input').value.trim();
@@ -210,6 +214,21 @@
   };
 
   window.doSignOut = () => signOut(auth);
+
+  window.doReset = async () => {
+    const email = document.getElementById('email-input').value.trim() || ADMIN_EMAIL;
+    const msgEl = document.getElementById('reset-msg');
+    const errEl = document.getElementById('login-err');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      msgEl.textContent = `Reset email sent to ${email} — check your inbox.`;
+      msgEl.style.display = 'block';
+      errEl.style.display = 'none';
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  };
 
   onAuthStateChanged(auth, user => {
     if (user && user.email === ADMIN_EMAIL) {
